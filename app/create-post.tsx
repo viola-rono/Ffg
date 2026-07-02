@@ -113,6 +113,7 @@ export default function CreatePostScreen() {
         text_color: postType === "text" ? textBg.text : null,
       });
       if (error) throw error;
+      Alert.alert("Success", "Post created successfully!");
       router.back();
     } catch (err: any) {
       Alert.alert("Post Failed", err.message ?? "Something went wrong.");

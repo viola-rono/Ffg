@@ -288,52 +288,38 @@ export default function HomeScreen() {
 
   const fetchPosts = async (from = 0, append = false) => {
     if (!user) return;
-    const { data, error } = await supabase
-      .from("posts_with_meta")
-      .select("*")
+    const { data: rawPosts, error } = await supabase
+      .from("posts")
+      .select("*, profiles(username, full_name, avatar_url)")
       .order("created_at", { ascending: false })
       .range(from, from + PAGE_SIZE - 1);
 
     if (error) {
-      // Fallback: fetch from posts table directly
-      const { data: rawPosts } = await supabase
-        .from("posts")
-        .select("*, profiles(username, full_name, avatar_url)")
-        .order("created_at", { ascending: false })
-        .range(from, from + PAGE_SIZE - 1);
-
-      const mapped: Post[] = (rawPosts ?? []).map((p: any) => ({
-        id: p.id,
-        user_id: p.user_id,
-        username: p.profiles?.username ?? "user",
-        full_name: p.profiles?.full_name ?? null,
-        avatar_url: p.profiles?.avatar_url ?? null,
-        content: p.content,
-        image_urls: p.image_urls,
-        video_url: p.video_url,
-        location: p.location,
-        music_title: p.music_title,
-        music_artist: p.music_artist,
-        feeling: p.feeling,
-        hashtags: p.hashtags,
-        likes_count: p.likes_count ?? 0,
-        comments_count: p.comments_count ?? 0,
-        views_count: p.views_count ?? 0,
-        is_liked: false,
-        is_saved: false,
-        created_at: p.created_at,
-        is_edited: p.is_edited ?? false,
-      }));
-      if (append) setPosts((prev) => [...prev, ...mapped]);
-      else setPosts(mapped);
-      setHasMore(mapped.length === PAGE_SIZE);
+      console.error("Fetch posts error:", error);
       return;
     }
 
-    const mapped: Post[] = (data ?? []).map((p: any) => ({
-      ...p,
-      is_liked: p.is_liked ?? false,
-      is_saved: p.is_saved ?? false,
+    const mapped: Post[] = (rawPosts ?? []).map((p: any) => ({
+      id: p.id,
+      user_id: p.user_id,
+      username: p.profiles?.username ?? "user",
+      full_name: p.profiles?.full_name ?? null,
+      avatar_url: p.profiles?.avatar_url ?? null,
+      content: p.content,
+      image_urls: p.image_urls,
+      video_url: p.video_url,
+      location: p.location,
+      music_title: p.music_title,
+      music_artist: p.music_artist,
+      feeling: p.feeling,
+      hashtags: p.hashtags,
+      likes_count: p.likes_count ?? 0,
+      comments_count: p.comments_count ?? 0,
+      views_count: p.views_count ?? 0,
+      is_liked: false,
+      is_saved: false,
+      created_at: p.created_at,
+      is_edited: p.is_edited ?? false,
     }));
     if (append) setPosts((prev) => [...prev, ...mapped]);
     else setPosts(mapped);

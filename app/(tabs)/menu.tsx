@@ -184,22 +184,27 @@ export default function MenuScreen() {
 
         {/* Security */}
         <SettingSection title="SECURITY">
-          <SettingItem icon="shield.fill" label="Two-Factor Authentication" onPress={() => {}} />
-          <SettingItem icon="iphone" label="Active Sessions" onPress={() => {}} />
-          <SettingItem icon="arrow.clockwise" label="Logout All Devices" onPress={() => {}} />
+          <SettingItem icon="shield.fill" label="Two-Factor Authentication" onPress={() => router.push("/settings/two-factor" as any)} />
+          <SettingItem icon="iphone" label="Active Sessions" onPress={() => router.push("/settings/active-sessions" as any)} />
+          <SettingItem icon="arrow.clockwise" label="Logout All Devices" onPress={() => {
+            Alert.alert("Logout All Devices", "Sign out from all devices?", [
+              { text: "Cancel" },
+              { text: "Logout All", onPress: () => signOut() }
+            ]);
+          }} />
         </SettingSection>
 
         {/* Storage */}
         <SettingSection title="STORAGE">
-          <SettingItem icon="trash" label="Clear Cache" onPress={() => Alert.alert("Cache Cleared", "Local cache has been cleared.")} />
+          <SettingItem icon="trash" label="Storage & Cache" onPress={() => router.push("/settings/storage" as any)} />
         </SettingSection>
 
         {/* About */}
         <SettingSection title="ABOUT">
-          <SettingItem icon="doc.text" label="Privacy Policy" onPress={() => {}} />
-          <SettingItem icon="doc.text.fill" label="Terms of Service" onPress={() => {}} />
-          <SettingItem icon="questionmark.circle" label="Help & Support" onPress={() => {}} />
-          <SettingItem icon="envelope" label="Contact Us" onPress={() => {}} />
+          <SettingItem icon="doc.text" label="Privacy Policy" onPress={() => router.push("/settings/privacy-policy" as any)} />
+          <SettingItem icon="doc.text.fill" label="Terms of Service" onPress={() => router.push("/settings/terms-of-service" as any)} />
+          <SettingItem icon="questionmark.circle" label="Help & Support" onPress={() => router.push("/settings/help-support" as any)} />
+          <SettingItem icon="envelope" label="Contact Us" onPress={() => router.push("/settings/contact-us" as any)} />
           <SettingItem icon="info.circle" label="App Version 1.0.0" rightElement={<View />} />
         </SettingSection>
 
