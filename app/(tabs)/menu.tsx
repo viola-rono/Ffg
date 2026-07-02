@@ -125,7 +125,7 @@ export default function MenuScreen() {
 
         {/* Account */}
         <SettingSection title="ACCOUNT">
-          <SettingItem icon="person.crop.circle" label="Edit Profile" onPress={() => {}} />
+          <SettingItem icon="person.crop.circle" label="Edit Profile" onPress={() => router.push("/settings/edit-profile" as any)} />
           <SettingItem icon="at" label="Change Username" onPress={() => {}} />
           <SettingItem icon="envelope" label="Change Email" onPress={() => {}} />
           <SettingItem icon="lock" label="Change Password" onPress={() => {}} />
