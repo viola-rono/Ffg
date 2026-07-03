@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from "react";
 import {
   View, Text, StyleSheet, FlatList, Pressable,
-  RefreshControl, ActivityIndicator, TextInput, Image,
+  RefreshControl, ActivityIndicator, TextInput, Image, GestureResponderEvent,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -11,7 +11,10 @@ import { useColors } from "@/hooks/use-colors";
 import { useSupabaseAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { PostSkeleton, StorySkeleton } from "@/components/ui/skeleton";
+import { ReactionPicker, ReactionType, REACTIONS } from "@/components/ui/reaction-picker";
+import { usePostReactions } from "@/hooks/use-post-reactions";
 import { formatDistanceToNow } from "date-fns";
+import { useState as useStateReact } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Story {
@@ -43,6 +46,7 @@ interface Post {
   is_saved: boolean;
   created_at: string;
   is_edited: boolean;
+  reactions_count?: number;
 }
 
 // ─── Story Item ───────────────────────────────────────────────────────────────
@@ -230,10 +234,20 @@ function PostCard({ post, onLike, onSave, onComment, onShare, onMenu }: {
 
       {/* Actions */}
       <View style={[styles.postActions, { borderTopColor: colors.border }]}>
-        <Pressable style={styles.actionBtn} onPress={handleLike}>
-          <IconSymbol name={liked ? "heart.fill" : "heart"} size={22} color={liked ? "#E8344E" : colors.muted} />
-          {likesCount > 0 ? <Text style={[styles.actionCount, { color: colors.muted }]}>{likesCount}</Text> : null}
+        <Pressable
+          style={styles.actionBtn}
+          onLongPress={handleReactionLongPress}
+          onPress={() => handleReactionSelect(userReaction === "like" ? "like" : "like")}
+        >
+          <Text style={styles.reactionEmoji}>{getReactionEmoji() || "👍"}</Text>
+          {getTotalReactions() > 0 ? <Text style={[styles.actionCount, { color: colors.muted }]}>{getTotalReactions()}</Text> : null}
         </Pressable>
+        <ReactionPicker
+          visible={pickerVisible}
+          onSelect={handleReactionSelect}
+          onDismiss={() => setPickerVisible(false)}
+          position={pickerPos}
+        />
         <Pressable style={styles.actionBtn} onPress={() => onComment(post.id)}>
           <IconSymbol name="bubble.left" size={22} color={colors.muted} />
           {post.comments_count > 0 ? <Text style={[styles.actionCount, { color: colors.muted }]}>{post.comments_count}</Text> : null}
@@ -579,6 +593,7 @@ const styles = StyleSheet.create({
   },
   actionBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 4, paddingHorizontal: 8 },
   actionCount: { fontSize: 13, fontWeight: "500" },
+  reactionEmoji: { fontSize: 20 },
   saveBtn: { marginLeft: "auto" },
   loadMoreIndicator: { paddingVertical: 20, alignItems: "center" },
   emptyState: { alignItems: "center", paddingTop: 60, paddingHorizontal: 32, gap: 12 },
