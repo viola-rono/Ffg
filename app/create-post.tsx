@@ -13,6 +13,20 @@ import { useSupabaseAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 
 type PostType = "text" | "photo" | "video";
+type PostVisibility = "public" | "followers" | "only_me";
+type CommentPrivacy = "everyone" | "followers" | "only_me";
+
+const VISIBILITY_OPTIONS = [
+  { value: "public" as PostVisibility, label: "Public", icon: "globe" },
+  { value: "followers" as PostVisibility, label: "Followers", icon: "person.2" },
+  { value: "only_me" as PostVisibility, label: "Only Me", icon: "lock" },
+];
+
+const COMMENT_PRIVACY_OPTIONS = [
+  { value: "everyone" as CommentPrivacy, label: "Everyone" },
+  { value: "followers" as CommentPrivacy, label: "Followers" },
+  { value: "only_me" as CommentPrivacy, label: "Only Me" },
+];
 
 const FEELINGS = [
   { label: "Happy", icon: "face.smiling" },
@@ -46,6 +60,8 @@ export default function CreatePostScreen() {
   const [location, setLocation] = useState("");
   const [feeling, setFeeling] = useState<string | null>(null);
   const [hashtags, setHashtags] = useState("");
+  const [visibility, setVisibility] = useState<PostVisibility>("public");
+  const [commentPrivacy, setCommentPrivacy] = useState<CommentPrivacy>("everyone");
   const [textBg, setTextBg] = useState(TEXT_BACKGROUNDS[0]);
   const [loading, setLoading] = useState(false);
   const [showFeelings, setShowFeelings] = useState(false);
@@ -108,6 +124,8 @@ export default function CreatePostScreen() {
         location: location.trim() || null,
         feeling: feeling,
         hashtags: tags.length > 0 ? tags : null,
+        visibility,
+        comment_privacy: commentPrivacy,
         post_type: postType,
         text_bg_color: postType === "text" ? textBg.bg : null,
         text_color: postType === "text" ? textBg.text : null,
@@ -259,7 +277,46 @@ export default function CreatePostScreen() {
               autoCapitalize="none"
             />
           </View>
+          {/* Visibility */}
+          <View style={[styles.fieldRow, { borderColor: colors.border }]}> 
+            <IconSymbol name="globe" size={18} color="#E8344E" />
+            <Text style={[styles.fieldInput, { color: colors.foreground, fontWeight: "700" }]}>Who can see this post?</Text>
+          </View>
+          <View style={styles.privacyChipsRow}>
+            {VISIBILITY_OPTIONS.map((option) => (
+              <Pressable
+                key={option.value}
+                style={[
+                  styles.privacyOption,
+                  { backgroundColor: visibility === option.value ? "#E8344E" : colors.surface, borderColor: visibility === option.value ? "#E8344E" : colors.border },
+                ]}
+                onPress={() => setVisibility(option.value)}
+              >
+                <IconSymbol name={option.icon} size={16} color={visibility === option.value ? "#FFF" : "#E8344E"} />
+                <Text style={[styles.privacyOptionText, { color: visibility === option.value ? "#FFF" : colors.foreground }]}>{option.label}</Text>
+              </Pressable>
+            ))}
+          </View>
 
+          {/* Comment privacy */}
+          <View style={[styles.fieldRow, { borderColor: colors.border }]}> 
+            <IconSymbol name="bubble.left" size={18} color="#E8344E" />
+            <Text style={[styles.fieldInput, { color: colors.foreground, fontWeight: "700" }]}>Who can comment?</Text>
+          </View>
+          <View style={styles.privacyChipsRow}>
+            {COMMENT_PRIVACY_OPTIONS.map((option) => (
+              <Pressable
+                key={option.value}
+                style={[
+                  styles.privacyOption,
+                  { backgroundColor: commentPrivacy === option.value ? "#E8344E" : colors.surface, borderColor: commentPrivacy === option.value ? "#E8344E" : colors.border },
+                ]}
+                onPress={() => setCommentPrivacy(option.value)}
+              >
+                <Text style={[styles.privacyOptionText, { color: commentPrivacy === option.value ? "#FFF" : colors.foreground }]}>{option.label}</Text>
+              </Pressable>
+            ))}
+          </View>
           {/* Location */}
           <View style={[styles.fieldRow, { borderColor: colors.border }]}>
             <IconSymbol name="location" size={18} color="#E8344E" />
@@ -378,4 +435,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1,
   },
   actionChipText: { fontSize: 13, fontWeight: "500" },
+  privacyChipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingBottom: 8 },
+  privacyOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  privacyOptionText: { fontSize: 13, fontWeight: "600" },
 });

@@ -22,6 +22,17 @@ interface Story {
   is_own: boolean;
 }
 
+type ReactionType = "like" | "love" | "haha" | "wow" | "sad" | "angry";
+
+const REACTIONS: Array<{ type: ReactionType; emoji: string; label: string }> = [
+  { type: "like", emoji: "👍", label: "Like" },
+  { type: "love", emoji: "❤️", label: "Love" },
+  { type: "haha", emoji: "😂", label: "Haha" },
+  { type: "wow", emoji: "😮", label: "Wow" },
+  { type: "sad", emoji: "😢", label: "Sad" },
+  { type: "angry", emoji: "😡", label: "Angry" },
+];
+
 interface Post {
   id: string;
   user_id: string;
@@ -41,6 +52,9 @@ interface Post {
   views_count: number;
   is_liked: boolean;
   is_saved: boolean;
+  reaction_type: ReactionType | null;
+  visibility: "public" | "followers" | "only_me";
+  comment_privacy: "everyone" | "followers" | "only_me";
   created_at: string;
   is_edited: boolean;
 }
@@ -114,9 +128,9 @@ function PostComposer({ profile, onPress }: { profile: any; onPress: () => void 
 }
 
 // ─── Post Card ────────────────────────────────────────────────────────────────
-function PostCard({ post, onLike, onSave, onComment, onShare, onMenu }: {
+function PostCard({ post, onReact, onSave, onComment, onShare, onMenu }: {
   post: Post;
-  onLike: (id: string, liked: boolean) => void;
+  onReact: (id: string, reaction: ReactionType | null) => void;
   onSave: (id: string, saved: boolean) => void;
   onComment: (id: string) => void;
   onShare: (id: string) => void;
@@ -124,21 +138,35 @@ function PostCard({ post, onLike, onSave, onComment, onShare, onMenu }: {
 }) {
   const colors = useColors();
   const router = useRouter();
-  const [liked, setLiked] = useState(post.is_liked);
+  const [reaction, setReaction] = useState<ReactionType | null>(post.reaction_type);
   const [saved, setSaved] = useState(post.is_saved);
   const [likesCount, setLikesCount] = useState(post.likes_count);
+  const [pickerVisible, setPickerVisible] = useState(false);
 
-  const handleLike = () => {
-    const newLiked = !liked;
-    setLiked(newLiked);
-    setLikesCount((c) => c + (newLiked ? 1 : -1));
-    onLike(post.id, newLiked);
+  const handleReactPress = () => {
+    const newReaction = reaction ? null : "like";
+    setReaction(newReaction);
+    setLikesCount((c) => c + (reaction ? -1 : 1));
+    onReact(post.id, newReaction);
   };
 
   const handleSave = () => {
     const newSaved = !saved;
     setSaved(newSaved);
     onSave(post.id, newSaved);
+  };
+
+  const handleSelectReaction = (type: ReactionType) => {
+    setPickerVisible(false);
+    if (type === reaction) return;
+    const increment = reaction ? 0 : 1;
+    setReaction(type);
+    setLikesCount((c) => c + increment);
+    onReact(post.id, type);
+  };
+
+  const handleLongPress = () => {
+    setPickerVisible(true);
   };
 
   const timeAgo = (() => {
@@ -230,10 +258,34 @@ function PostCard({ post, onLike, onSave, onComment, onShare, onMenu }: {
 
       {/* Actions */}
       <View style={[styles.postActions, { borderTopColor: colors.border }]}>
-        <Pressable style={styles.actionBtn} onPress={handleLike}>
-          <IconSymbol name={liked ? "heart.fill" : "heart"} size={22} color={liked ? "#E8344E" : colors.muted} />
-          {likesCount > 0 ? <Text style={[styles.actionCount, { color: colors.muted }]}>{likesCount}</Text> : null}
-        </Pressable>
+        <View style={styles.reactionArea}>
+          <Pressable
+            style={styles.actionBtn}
+            onPress={handleReactPress}
+            onLongPress={handleLongPress}
+            delayLongPress={300}
+          >
+            {reaction ? (
+              <Text style={[styles.reactionEmoji, { color: reaction === "love" ? "#E8344E" : colors.muted }]}> {REACTIONS.find((r) => r.type === reaction)?.emoji} </Text>
+            ) : (
+              <IconSymbol name="heart" size={22} color={colors.muted} />
+            )}
+            {likesCount > 0 ? <Text style={[styles.actionCount, { color: colors.muted }]}>{likesCount}</Text> : null}
+          </Pressable>
+          {pickerVisible ? (
+            <View style={[styles.reactionPicker, { backgroundColor: colors.surfaceElevated ?? colors.surface, borderColor: colors.border }]}> 
+              {REACTIONS.map((option) => (
+                <Pressable
+                  key={option.type}
+                  style={styles.reactionOption}
+                  onPress={() => handleSelectReaction(option.type)}
+                >
+                  <Text style={styles.reactionOptionText}>{option.emoji}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+        </View>
         <Pressable style={styles.actionBtn} onPress={() => onComment(post.id)}>
           <IconSymbol name="bubble.left" size={22} color={colors.muted} />
           {post.comments_count > 0 ? <Text style={[styles.actionCount, { color: colors.muted }]}>{post.comments_count}</Text> : null}
@@ -286,18 +338,54 @@ export default function HomeScreen() {
     setStories([ownStory, ...others]);
   };
 
+  const fetchUserReactions = async (postIds: string[]) => {
+    if (!user || postIds.length === 0) return new Map<string, ReactionType | null>();
+    const { data, error } = await supabase
+      .from("post_likes")
+      .select("post_id, reaction_type")
+      .in("post_id", postIds)
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("Fetch post reactions error:", error);
+      return new Map();
+    }
+
+    return new Map((data ?? []).map((row: any) => [row.post_id, row.reaction_type as ReactionType]));
+  };
+
   const fetchPosts = async (from = 0, append = false) => {
     if (!user) return;
-    const { data: rawPosts, error } = await supabase
+
+    const { data: followingRows } = await supabase
+      .from("follows")
+      .select("following_id")
+      .eq("follower_id", user.id);
+
+    const followingIds = (followingRows ?? []).map((row: any) => row.following_id).filter(Boolean);
+
+    let query = supabase
       .from("posts")
       .select("*, profiles(username, full_name, avatar_url)")
-      .order("created_at", { ascending: false })
-      .range(from, from + PAGE_SIZE - 1);
+      .order("created_at", { ascending: false });
+
+    if (followingIds.length > 0) {
+      const quotedIds = followingIds.map((id: string) => `"${id}"`).join(",");
+      const followersCondition = `and(visibility.eq.followers,user_id.in.(${quotedIds}))`;
+      query = query.or(`visibility.eq.public,user_id.eq.${user.id},${followersCondition}`);
+    } else {
+      query = query.or(`visibility.eq.public,user_id.eq.${user.id}`);
+    }
+
+    const { data: rawPosts, error } = await query.range(from, from + PAGE_SIZE - 1);
 
     if (error) {
       console.error("Fetch posts error:", error);
       return;
     }
+
+    const ids = (rawPosts ?? []).map((p: any) => p.id).filter(Boolean);
+    const reactionMap = await fetchUserReactions(ids);
 
     const mapped: Post[] = (rawPosts ?? []).map((p: any) => ({
       id: p.id,
@@ -316,8 +404,11 @@ export default function HomeScreen() {
       likes_count: p.likes_count ?? 0,
       comments_count: p.comments_count ?? 0,
       views_count: p.views_count ?? 0,
-      is_liked: false,
+      is_liked: Boolean(reactionMap.get(p.id)),
       is_saved: false,
+      reaction_type: reactionMap.get(p.id) ?? null,
+      visibility: p.visibility ?? "public",
+      comment_privacy: p.comment_privacy ?? "everyone",
       created_at: p.created_at,
       is_edited: p.is_edited ?? false,
     }));
@@ -349,10 +440,10 @@ export default function HomeScreen() {
     setLoadingMore(false);
   };
 
-  const handleLike = async (postId: string, liked: boolean) => {
+  const handleReact = async (postId: string, reaction: ReactionType | null) => {
     if (!user) return;
-    if (liked) {
-      await supabase.from("post_likes").upsert({ post_id: postId, user_id: user.id });
+    if (reaction) {
+      await supabase.from("post_likes").upsert({ post_id: postId, user_id: user.id, reaction_type: reaction });
     } else {
       await supabase.from("post_likes").delete().eq("post_id", postId).eq("user_id", user.id);
     }
@@ -428,7 +519,7 @@ export default function HomeScreen() {
   const renderPost = ({ item }: { item: Post }) => (
     <PostCard
       post={item}
-      onLike={handleLike}
+      onReact={handleReact}
       onSave={handleSave}
       onComment={(id) => router.push(`/post/${id}` as any)}
       onShare={() => {}}
@@ -579,6 +670,31 @@ const styles = StyleSheet.create({
   },
   actionBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 4, paddingHorizontal: 8 },
   actionCount: { fontSize: 13, fontWeight: "500" },
+  reactionArea: { position: "relative", zIndex: 10 },
+  reactionEmoji: { fontSize: 20, marginRight: 4 },
+  reactionPicker: {
+    position: "absolute",
+    top: -50,
+    left: 0,
+    flexDirection: "row",
+    padding: 6,
+    borderRadius: 24,
+    borderWidth: 1,
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+    gap: 6,
+  },
+  reactionOption: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reactionOptionText: { fontSize: 18 },
   saveBtn: { marginLeft: "auto" },
   loadMoreIndicator: { paddingVertical: 20, alignItems: "center" },
   emptyState: { alignItems: "center", paddingTop: 60, paddingHorizontal: 32, gap: 12 },

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   View, Text, StyleSheet, FlatList, Pressable,
-  TextInput, Image, KeyboardAvoidingView, Platform, ActivityIndicator,
+  TextInput, Image, KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -32,6 +32,9 @@ export default function PostDetailScreen() {
   const [commentText, setCommentText] = useState("");
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
+  const [viewAllowed, setViewAllowed] = useState(true);
+  const [restrictionReason, setRestrictionReason] = useState<string | null>(null);
+  const [isFollowingAuthor, setIsFollowingAuthor] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
   const fetchPost = async () => {
@@ -40,7 +43,50 @@ export default function PostDetailScreen() {
       .select("*, profiles(username, full_name, avatar_url)")
       .eq("id", postId)
       .single();
+
+    if (!data) {
+      setViewAllowed(false);
+      setRestrictionReason("This post could not be found.");
+      return false;
+    }
+
+    let allowed = true;
+    let reason = null;
+    if (data.visibility === "only_me" && user?.id !== data.user_id) {
+      allowed = false;
+      reason = "This post is private.";
+    }
+
+    if (data.visibility === "followers" && user?.id && user.id !== data.user_id) {
+      const { data: followData } = await supabase
+        .from("follows")
+        .select("id")
+        .eq("follower_id", user.id)
+        .eq("following_id", data.user_id)
+        .single();
+      const isFollowing = !!followData;
+      setIsFollowingAuthor(isFollowing);
+      if (!isFollowing) {
+        allowed = false;
+        reason = "Only followers can view this post.";
+      }
+    }
+
+    if (!user && data.visibility !== "public") {
+      allowed = false;
+      reason = "You must be signed in to view this post.";
+    }
+
+    if (!allowed) {
+      setViewAllowed(false);
+      setRestrictionReason(reason);
+      return false;
+    }
+
     setPost(data);
+    setViewAllowed(true);
+    setRestrictionReason(null);
+    return true;
   };
 
   const fetchComments = async () => {
@@ -63,11 +109,29 @@ export default function PostDetailScreen() {
   };
 
   useEffect(() => {
-    Promise.all([fetchPost(), fetchComments()]).then(() => setLoading(false));
+    const load = async () => {
+      const allowed = await fetchPost();
+      if (allowed) {
+        await fetchComments();
+      }
+      setLoading(false);
+    };
+    load();
   }, [postId]);
 
   const handleComment = async () => {
-    if (!commentText.trim() || !user) return;
+    if (!commentText.trim() || !user || !post) return;
+
+    if (post.comment_privacy === "only_me" && user.id !== post.user_id) {
+      Alert.alert("Comments restricted", "Only the author can comment on this post.");
+      return;
+    }
+
+    if (post.comment_privacy === "followers" && user.id !== post.user_id && !isFollowingAuthor) {
+      Alert.alert("Comments restricted", "Only followers can comment on this post.");
+      return;
+    }
+
     const text = commentText.trim();
     setCommentText("");
     setPosting(true);
@@ -147,6 +211,14 @@ export default function PostDetailScreen() {
     );
   };
 
+  const canComment = Boolean(
+    post && user && (
+      post.comment_privacy === "everyone" ||
+      user.id === post.user_id ||
+      (post.comment_privacy === "followers" && isFollowingAuthor)
+    )
+  );
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -162,6 +234,12 @@ export default function PostDetailScreen() {
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator color="#E8344E" />
+          </View>
+        ) : !viewAllowed ? (
+          <View style={styles.restrictedContainer}>
+            <IconSymbol name="lock" size={42} color="#E8344E" />
+            <Text style={[styles.restrictedTitle, { color: colors.foreground }]}>Restricted Post</Text>
+            <Text style={[styles.restrictedMessage, { color: colors.muted }]}>{restrictionReason ?? "You don't have permission to view this post."}</Text>
           </View>
         ) : (
           <FlatList
@@ -225,6 +303,9 @@ const styles = StyleSheet.create({
   commentUsername: { fontSize: 13, fontWeight: "700" },
   commentContent: { fontSize: 14, lineHeight: 20, marginTop: 2 },
   commentTime: { fontSize: 11, marginTop: 4 },
+  restrictedContainer: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 20 },
+  restrictedTitle: { fontSize: 20, fontWeight: "700", marginTop: 12 },
+  restrictedMessage: { fontSize: 14, textAlign: "center", marginTop: 8, lineHeight: 20 },
   inputBar: {
     flexDirection: "row", alignItems: "center", gap: 8,
     paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1,
